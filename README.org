@@ -1,0 +1,5 @@
+* githubq
+
+`githubq` is a utility for exploring github through it's GraphQL API.
+
+** License

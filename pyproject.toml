@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "githubq"
+version = "0.1.0"
+description = "Application for exploring Github through it's REST API"
+readme = "README.org"
+license = "Apache-2.0"
+authors = ["Christian Hopps <chopps@gmail.com>"]
+
+[tool.poetry.scripts]
+githubq = 'githubq.__main__:main'
+
+[tool.poetry.dependencies]
+python = ">=3.6.2"
+PyGithub = "^1.55"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2"
+black = "^21.8b0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
