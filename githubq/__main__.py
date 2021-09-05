@@ -20,6 +20,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 import argparse
+import json
 import logging
 import os
 import pdb
@@ -35,6 +36,44 @@ def get_password_arg(name):
     if name.startswith("env:"):
         return os.environ[name[4:]]
     return name
+
+
+def paginate(url, headers, query, keys, cursor_key="cursor"):
+    count = 0
+    collect = []
+    jsonv = {}
+    cursor = ""
+
+    while count < 10000:
+        jarg = {"query": query, "variables": jsonv}
+        r = requests.post(url=url, json=jarg, headers=headers)
+        j = json.loads(r.text)
+        try:
+            d = j
+            for key in keys:
+                d = d[key]
+            if not d:
+                break
+            assert isinstance(d, list)
+            collect.extend(d)
+        except KeyError:
+            break
+        last = d[-1]
+        if cursor_key not in last:
+            break
+        newcursor = last[cursor_key]
+        if newcursor == cursor:
+            break
+        cursor = newcursor
+        jsonv = {cursor_key: cursor}
+        count += 10
+
+    # Now replace the collecting array with the entire array in the json
+    d = j
+    for key in keys[:-1]:
+        d = d[key]
+    d[key] = collect
+    return j, collect
 
 
 def main():
@@ -86,27 +125,37 @@ def main():
         pdb.set_trace()
         print("DONE")
 
-    # repo = gh.get_repo
-    url = 'https://api.github.com/graphql'
-    json = { 'query' : '''
-{
-  repository(owner:"FRRouting", name:"frr") {
-    pullRequests(last: 10) {
-      edges {
-        node {
-          number
-          mergeable
-        }
-      }
-    }
-  }
-}
-    '''
-    }
-    api_token = args.auth_token
-    headers = {'Authorization': 'token %s' % api_token}
-    r = requests.post(url=url, json=json, headers=headers)
-    print (r.text)
+    # https://docs.github.com/en/graphql/reference/objects#headrefforcepushedevent
+    owner, project = args.repo.split("/")
+    url = "https://api.github.com/graphql"
+    headers = {"Authorization": "token " + args.auth_token}
+    jsonq = f"""
+query($cursor:String) {{
+  repository(owner: "{owner}", name: "{project}") {{
+    pullRequest(number: {args.pr}) {{
+      timelineItems(first: 10, after: $cursor, itemTypes: HEAD_REF_FORCE_PUSHED_EVENT) {{
+        edges {{
+          cursor
+          node {{
+            ... on HeadRefForcePushedEvent {{
+              createdAt
+              afterCommit {{
+                oid
+              }}
+            }}
+          }}
+        }}
+      }}
+    }}
+  }}
+}}"""
+    j, edges = paginate(
+        url,
+        headers,
+        jsonq,
+        ["data", "repository", "pullRequest", "timelineItems", "edges"],
+    )
+    print(json.dumps(j, indent=2))
 
 
 if __name__ == "__main__":
